@@ -211,7 +211,7 @@ class Engine:
                     continue
 
                 context.failure_reason = str(exc)
-                context.transition_to("FAILED")
+                transition(context, "FAILED")
 
                 raise
 
