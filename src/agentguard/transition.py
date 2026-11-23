@@ -10,15 +10,18 @@ ALLOWED_TRANSITIONS = {
     "COMPLETED": set(),
 }
 
-def transition_to(self, new_status):
+def transition(context, new_status):
 
-    if new_status in ALLOWED_TRANSITIONS[self.status]:
-        if new_status == "RUNNING":
-            if self.started_at is None:
-                self.started_at = datetime.now(timezone.utc)
-            self.start_time_monotonic = time.monotonic()
-        self.status = new_status
-    else:
+    if new_status not in ALLOWED_TRANSITIONS[context.status]:
         raise ValueError(
-            f"{new_status} is not allowed to transition when you are in {self.status}"
+            f"{new_status} is not allowed to transition "
+            f"when you are in {context.status}"
         )
+
+    if new_status == "RUNNING":
+        if context.started_at is None:
+            context.started_at = datetime.now(timezone.utc)
+
+        context.start_time_monotonic = time.monotonic()
+
+    context.status = new_status

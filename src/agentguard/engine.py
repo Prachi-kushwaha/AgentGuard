@@ -2,12 +2,11 @@ import inspect
 import time
 import math
 
-from function_register import FunctionRegister
-from execution_context import ExecutionContext, validate_execution, ExecutionRejected
-from execution_policy import ExecutionPolicy
-from backoff import BackoffPolicy
-
-
+from .function_register import FunctionRegister
+from .execution_context import ExecutionContext, validate_execution, ExecutionRejected
+from .execution_policy import ExecutionPolicy
+from .backoff import BackoffPolicy
+from .transition import transition
 class Engine:
 
     def __init__(self, registry):
@@ -81,7 +80,7 @@ class Engine:
 
             context.last_error = str(exc)
             context.failure_reason = str(exc)
-            context.transition_to("FAILED")
+            transition(context, "FAILED")
 
             raise
 
@@ -97,12 +96,12 @@ class Engine:
                 context.failure_reason = str(exc)
 
                 if context.status in {"CREATED", "RETRYING"}:
-                    context.transition_to("FAILED")
+                    transition(context, "FAILED")
 
                 raise
 
             context.attempt_number += 1
-            context.transition_to("RUNNING")
+            transition(context, "RUNNING")
 
             try:
 
@@ -123,6 +122,10 @@ class Engine:
                             effective_timeout,
                             deadline_remaining
                         )
+                if effective_timeout is not None and effective_timeout <= 0:
+                            raise ExecutionRejected(
+                            "Execution time budget exhausted before attempt started"
+                        )
 
                 result = func(*args, **kwargs)
 
@@ -138,7 +141,7 @@ class Engine:
                     )
 
                 context.results = result
-                context.transition_to("COMPLETED")
+                transition(context, "COMPLETED")
 
                 return result
 
@@ -182,7 +185,7 @@ class Engine:
                             "Execution deadline exceeded before next retry"
                         )
 
-                        context.transition_to("FAILED")
+                        transition(context, "FAILED")
 
                         raise ExecutionRejected(
                             context.failure_reason
@@ -201,7 +204,7 @@ class Engine:
 
                 if should_retry:
 
-                    context.transition_to("RETRYING")
+                    transition(context, "RETRYING")
 
                     time.sleep(delay)
 
