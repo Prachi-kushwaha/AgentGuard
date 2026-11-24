@@ -18,23 +18,15 @@ OPERATION_STATES = {
 class OperationRecord:
 
     operation_id: str = field(default_factory=lambda: str(uuid4()))
-
     idempotency_key: str | None = None
-
     function_name: str = ""
-
     fingerprint: str | None = None
-
     status: str = "PENDING"
-
     result: Any = None
-
     error: str | None = None
-
     created_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
-
     updated_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
