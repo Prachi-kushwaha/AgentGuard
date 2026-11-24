@@ -17,6 +17,7 @@ OPERATION_STATES = {
 @dataclass(frozen=True)
 class OperationRecord:
 
+    scope_id: str = "default"
     operation_id: str = field(default_factory=lambda: str(uuid4()))
     idempotency_key: str | None = None
     function_name: str = ""
@@ -24,12 +25,11 @@ class OperationRecord:
     status: str = "PENDING"
     result: Any = None
     error: str | None = None
+    version: int = 0
     created_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
-    updated_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    updated_at: datetime | None = None
     # Actual attempts to execute the operation
     attempt_number: int = 0
     # Attempts to resolve the uncertain operation state
@@ -41,6 +41,12 @@ class OperationRecord:
         self.validate()
 
     def validate(self):
+
+        if not isinstance(self.scope_id, str):
+            raise TypeError("scope_id must be a string")
+
+        if not self.scope_id.strip():
+            raise ValueError("scope_id cannot be empty")
 
         if not isinstance(self.operation_id, str):
             raise TypeError("operation_id must be a string")
@@ -91,14 +97,15 @@ class OperationRecord:
         if not isinstance(self.created_at, datetime):
             raise TypeError("created_at must be a datetime")
 
-        if not isinstance(self.updated_at, datetime):
-            raise TypeError("updated_at must be a datetime")
+        if self.updated_at is not None:
+            if not isinstance(self.updated_at, datetime):
+                raise TypeError("updated_at must be a datetime or None")
+
+            if self.updated_at.tzinfo is None or self.updated_at.utcoffset() is None:
+                raise ValueError("updated_at must be timezone-aware")
 
         if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
             raise ValueError("created_at must be timezone-aware")
-
-        if self.updated_at.tzinfo is None or self.updated_at.utcoffset() is None:
-            raise ValueError("updated_at must be timezone-aware")
 
         if not isinstance(self.metadata, dict):
             raise TypeError("metadata must be a dictionary")
