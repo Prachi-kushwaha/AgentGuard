@@ -7,6 +7,7 @@ from .execution_context import ExecutionContext, validate_execution, ExecutionRe
 from .execution_policy import ExecutionPolicy
 from .backoff import BackoffPolicy
 from .transition import transition
+
 class Engine:
 
     def __init__(self, registry):
@@ -40,7 +41,6 @@ class Engine:
 
             if timeout <= 0:
                 raise ValueError("timeout must be greater than zero")
-
 
         if attempt_timeout is not None:
 
