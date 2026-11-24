@@ -10,6 +10,14 @@ from .protocol import (
     OperationIdentity,
     OwnershipGrant,
 )
+from ..state_machine import (
+    OperationState,
+    TransitionActor,
+    validate_transition,
+)
+from ..transition_validation import (
+    validate_transition_payload,
+)
 
 class BackendError(RuntimeError):
     """Base exception for backend errors."""
@@ -92,6 +100,7 @@ class InMemoryIdempotencyBackend:
             lease_expires_at=self._now() + timedelta(
                 seconds=lease_seconds
             ),
+            actor = TransitionActor.EXECUTION
         )
 
         self._ownership[operation_id] = grant
@@ -348,6 +357,7 @@ class InMemoryIdempotencyBackend:
                 lease_expires_at=self._now() + timedelta(
                     seconds=lease_seconds
                 ),
+                action=grant.actor
             )
 
             self._ownership[operation_id] = renewed_grant
@@ -360,7 +370,7 @@ class InMemoryIdempotencyBackend:
         updated_record,
         expected_status,
         expected_version,
-        owner_token,
+        owner_token
     ):
 
         if not isinstance(updated_record, OperationRecord):
@@ -380,9 +390,20 @@ class InMemoryIdempotencyBackend:
                     "Operation not found"
                 )
 
-            self._validate_ownership(
+            grant = self._validate_ownership(
                 operation_id,
                 owner_token,
+            )
+
+            validate_transition(
+                current=current.status,
+                target=updated_record.status,
+                actor=grant.actor,
+            )
+
+            validate_transition_payload(
+                current_status=current.status,
+                updated_record=updated_record,
             )
 
             # Optimistic concurrency checks.
@@ -481,7 +502,7 @@ class InMemoryIdempotencyBackend:
                     record=current,
                 )
 
-            # Atomic transition into RECOVERING
+            # Construct the proposed recovery transition
 
             recovering_record = replace(
                 current,
@@ -491,19 +512,40 @@ class InMemoryIdempotencyBackend:
                 version=current.version + 1,
             )
 
-            self._records[operation_id] = recovering_record
+            # Validate the state transition
+
+            validate_transition(
+                current=current.status,
+                target=recovering_record.status,
+                actor=TransitionActor.RECOVERY,
+            )
+
+            # Validate the transition payload
+
+            validate_transition_payload(
+                current_status=current.status,
+                updated_record=recovering_record,
+            )
+
+            # Create recovery ownership
 
             grant = self._create_grant(
                 operation_id,
                 owner_id,
                 lease_seconds,
+                actor=TransitionActor.RECOVERY,
             )
+
+            # Commit the record
+
+            self._records[operation_id] = recovering_record
 
             return ClaimResult(
                 disposition=ClaimDisposition.CLAIMED,
                 record=recovering_record,
                 grant=grant,
             )
+
 
     def release(
         self,

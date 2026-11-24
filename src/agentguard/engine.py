@@ -7,18 +7,122 @@ from .execution_context import ExecutionContext, validate_execution, ExecutionRe
 from .execution_policy import ExecutionPolicy
 from .backoff import BackoffPolicy
 from .transition import transition
+from .storage.protocol import ClaimDisposition
 
 class Engine:
 
-    def __init__(self, registry):
+    def __init__(self, registry, idempotency_coordinator=None):
 
         if not isinstance(registry, FunctionRegister):
             raise TypeError("registry must be a FunctionRegister instance")
 
         self.registry = registry
         self.executions = {}
+        self.idempotency_coordinator = idempotency_coordinator
 
-    def execute(self, name, *args, policy=None, backoff=None, timeout=None, attempt_timeout=None, **kwargs):
+    def execute(
+    self,
+    name,
+    *args,
+    policy=None,
+    backoff=None,
+    timeout=None,
+    attempt_timeout=None,
+    idempotency_key=None,
+    owner_id=None,
+    scope_id="default",
+        **kwargs,
+    ):
+
+        # Normal execution: no idempotency requested
+        if idempotency_key is None:
+            return self._execute_normal(
+                name,
+                *args,
+                policy=policy,
+                backoff=backoff,
+                timeout=timeout,
+                attempt_timeout=attempt_timeout,
+                **kwargs,
+            )
+
+        if self.idempotency_coordinator is None:
+            raise RuntimeError(
+                "Idempotency was requested but no "
+                "IdempotencyCoordinator is configured"
+            )
+
+        if owner_id is None:
+            from uuid import uuid4
+            owner_id = str(uuid4())
+
+        func = self.registry.retrieve(name)
+
+        claim = self.idempotency_coordinator.acquire(
+            func=func,
+            args=args,
+            kwargs=kwargs,
+            idempotency_key=idempotency_key,
+            owner_id=owner_id,
+            scope_id=scope_id,
+        )
+
+        # A previously completed operation is replayed.
+        if claim.disposition is ClaimDisposition.COMPLETED:
+            return claim.record.result
+
+        if claim.disposition is not ClaimDisposition.CLAIMED:
+            raise RuntimeError(
+                f"Unexpected claim disposition: {claim.disposition}"
+            )
+
+        grant = claim.grant
+        record = claim.record
+
+        try:
+
+            result = self._execute_normal(
+                name,
+                *args,
+                policy=policy,
+                backoff=backoff,
+                timeout=timeout,
+                attempt_timeout=attempt_timeout,
+                **kwargs,
+            )
+
+        except TimeoutError as exc:
+
+            self.idempotency_coordinator.record_unknown(
+                operation_id=record.operation_id,
+                error=exc,
+                grant=grant,
+                record=record,
+            )
+
+            raise
+
+        except Exception as exc:
+
+            self.idempotency_coordinator.record_failure(
+                operation_id=record.operation_id,
+                error=exc,
+                grant=grant,
+                record=record,
+            )
+
+            raise
+
+        self.idempotency_coordinator.record_success(
+            operation_id=record.operation_id,
+            result=result,
+            grant=grant,
+            record=record,
+        )
+
+        return result
+
+    def _execute_normal(self, name, *args, policy=None, backoff=None, timeout=None, attempt_timeout=None, **kwargs):
 
         if policy is None:
             policy = ExecutionPolicy(max_attempts=1, retry_on=())

@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 
 from ..operation_record import OperationRecord
-
+from ..state_machine import TransitionActor
 
 class ClaimDisposition(Enum):
     CLAIMED = "CLAIMED"
@@ -18,6 +18,7 @@ class OwnershipGrant:
     owner_id: str
     owner_token: str
     lease_expires_at: datetime
+    actor: TransitionActor
 
     def __post_init__(self):
 

@@ -10,6 +10,7 @@ from .storage.protocol import (
     OperationIdentity,
     OwnershipGrant,
 )
+from .state_machine import TransitionActor
 
 
 class IdempotencyError(RuntimeError):
@@ -196,6 +197,7 @@ class IdempotencyCoordinator:
             expected_status=expected_status,
             expected_version=expected_version,
             owner_token=grant.owner_token,
+            actor=TransitionActor.EXECUTION,
         )
 
     @staticmethod
