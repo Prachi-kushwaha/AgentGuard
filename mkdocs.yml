@@ -1,0 +1,21 @@
+site_name: AgentGuard
+site_description: Execution reliability infrastructure for Python applications and AI agents
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+
+
+nav:
+  - API Reference: api.md

@@ -30,6 +30,36 @@ class RecoveryRequiredError(IdempotencyError):
 
 
 class IdempotencyCoordinator:
+    """
+    Coordinates idempotent operation acquisition and outcome recording.
+
+    The coordinator acts as an orchestration layer between the
+    execution system and the storage backend.
+
+    Responsibilities:
+        - Validate acquisition inputs.
+        - Generate operation fingerprints.
+        - Construct operation identities and records.
+        - Delegate operation claims to the backend.
+        - Interpret claim dispositions.
+        - Construct outcome records.
+        - Delegate state mutations to the backend.
+
+    The coordinator does not independently enforce storage
+    atomicity, ownership validation, lease validity, or
+    optimistic concurrency. These guarantees are enforced
+    by the backend.
+
+    Lifecycle:
+        1. Validate operation inputs.
+        2. Generate a fingerprint.
+        3. Construct an operation identity.
+        4. Construct the initial operation record.
+        5. Request a claim from the backend.
+        6. Interpret the claim result.
+        7. Record the execution outcome through the backend.
+    """
+    
     def __init__(self, backend, lease_seconds: float = 30.0):
         if isinstance(lease_seconds, bool) or not isinstance(
             lease_seconds, (int, float)

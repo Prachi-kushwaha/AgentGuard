@@ -92,7 +92,7 @@ class InMemoryIdempotencyBackend:
             idempotency_key=record.idempotency_key,
         )
 
-    def _create_grant(self, operation_id, owner_id, lease_seconds):
+    def _create_grant(self, operation_id, owner_id, lease_seconds, actor=TransitionActor.EXECUTION):
 
         grant = OwnershipGrant(
             owner_id=owner_id,
@@ -100,7 +100,7 @@ class InMemoryIdempotencyBackend:
             lease_expires_at=self._now() + timedelta(
                 seconds=lease_seconds
             ),
-            actor = TransitionActor.EXECUTION
+            actor = actor
         )
 
         self._ownership[operation_id] = grant
@@ -154,6 +154,7 @@ class InMemoryIdempotencyBackend:
         record,
         owner_id,
         lease_seconds,
+
     ):
 
         if not isinstance(record, OperationRecord):
@@ -202,6 +203,7 @@ class InMemoryIdempotencyBackend:
                     claimed_record.operation_id,
                     owner_id,
                     lease_seconds,
+                    actor=TransitionActor.EXECUTION
                 )
 
                 return ClaimResult(
@@ -292,6 +294,7 @@ class InMemoryIdempotencyBackend:
                     operation_id,
                     owner_id,
                     lease_seconds,
+                    actor=TransitionActor.EXECUTION
                 )
 
                 return ClaimResult(
@@ -357,7 +360,7 @@ class InMemoryIdempotencyBackend:
                 lease_expires_at=self._now() + timedelta(
                     seconds=lease_seconds
                 ),
-                action=grant.actor
+                actor=grant.actor
             )
 
             self._ownership[operation_id] = renewed_grant
@@ -544,6 +547,108 @@ class InMemoryIdempotencyBackend:
                 disposition=ClaimDisposition.CLAIMED,
                 record=recovering_record,
                 grant=grant,
+            )
+
+
+    def handoff_recovery(
+    self,
+    operation_id,
+    recovery_token,
+    execution_owner_id,
+    lease_seconds,
+    expected_version,
+):
+        """
+        Transfer ownership from a recovery actor to an execution actor.
+
+        This performs a guarded RECOVERING -> RUNNING transition and
+        replaces the recovery grant with a fresh execution grant.
+        """
+
+        self._validate_owner_id(execution_owner_id)
+        self._validate_lease_seconds(lease_seconds)
+
+        if not isinstance(recovery_token, str):
+            raise TypeError("recovery_token must be a string")
+
+        if isinstance(expected_version, bool) or not isinstance(
+            expected_version, int
+        ):
+            raise TypeError("expected_version must be an integer")
+
+        with self._lock:
+
+            current = self._records.get(operation_id)
+
+            if current is None:
+                raise OperationNotFoundError(
+                    "Operation not found"
+                )
+
+            # Validate the current recovery authority.
+            recovery_grant = self._validate_ownership(
+                operation_id,
+                recovery_token,
+            )
+
+            # Handoff is exclusively a recovery-authority operation.
+            if recovery_grant.actor != TransitionActor.RECOVERY:
+                raise OwnershipError(
+                    "Handoff requires recovery ownership"
+                )
+
+            # Optimistic concurrency checks.
+            if current.status != "RECOVERING":
+                raise InvalidTransitionError(
+                    "Handoff requires RECOVERING status, "
+                    f"found {current.status}"
+                )
+
+            if current.version != expected_version:
+                raise InvalidTransitionError(
+                    f"Expected version {expected_version}, "
+                    f"found {current.version}"
+                )
+
+            # Construct the proposed execution record.
+            running_record = replace(
+                current,
+                status="RUNNING",
+                updated_at=self._now(),
+                version=current.version + 1,
+            )
+
+            # Validate the state-machine transition.
+            validate_transition(
+                current=current.status,
+                target=running_record.status,
+                actor=TransitionActor.RECOVERY,
+            )
+
+            # Validate record transition invariants.
+            validate_transition_payload(
+                current_status=current.status,
+                updated_record=running_record,
+            )
+
+            # Build the new execution grant without mutating backend state.
+            execution_grant = OwnershipGrant(
+                owner_id=execution_owner_id,
+                owner_token=str(uuid4()),
+                lease_expires_at=self._now() + timedelta(
+                    seconds=lease_seconds
+                ),
+                actor=TransitionActor.EXECUTION,
+            )
+
+            # Commit record and grant replacement under the same lock.
+            self._records[operation_id] = running_record
+            self._ownership[operation_id] = execution_grant
+
+            return ClaimResult(
+                disposition=ClaimDisposition.CLAIMED,
+                record=running_record,
+                grant=execution_grant,
             )
 
 

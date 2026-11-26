@@ -48,8 +48,7 @@ class Engine:
 
         if self.idempotency_coordinator is None:
             raise RuntimeError(
-                "Idempotency was requested but no "
-                "IdempotencyCoordinator is configured"
+                "Idempotency was requested but no IdempotencyCoordinator is configured"
             )
 
         if owner_id is None:

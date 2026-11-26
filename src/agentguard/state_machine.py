@@ -109,3 +109,5 @@ def validate_transition(
             f"{target_state.value} requires actor "
             f"{expected_actor.value if expected_actor else 'UNKNOWN'}"
         )
+
+
