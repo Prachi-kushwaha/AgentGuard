@@ -1,21 +1,64 @@
 site_name: AgentGuard
-site_description: Execution reliability infrastructure for Python applications and AI agents
+site_description: Reliable execution, idempotency, and recovery for Python applications.
+site_url: https://agentguard.readthedocs.io/
+
+repo_url:https://prachi-kushwaha.github.io/agentguard_docs
+repo_name: YOUR_USERNAME/AgentGuard
+
+copyright: Copyright &copy; 2026 AgentGuard
 
 theme:
   name: material
   features:
+    - navigation.tabs
     - navigation.sections
     - navigation.expand
-    - navigation.indexes
+    - navigation.path
+    - navigation.top
+    - search.suggest
+    - search.highlight
     - content.code.copy
+    - content.code.annotate
+
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+    - scheme: slate
+      primary: indigo
+      accent: blue
 
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          paths: [src]
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+  - toc:
+      permalink: true
 
 
 nav:
-  - API Reference: api.md
+  - Execution Engine:
+      - Overview: engine/overview.md
+      - Lifecycle: engine/lifecycle.md
+      - Retries: engine/retries.md
+      - Timeouts: engine/timeouts.md
+      - Execution Context: engine/context.md
+
+  - API Reference:
+      - Engine: api/engine.md
+      - Idempotency Coordinator: api/coordinator.md
+      - Execution Policy: api/execution_policy.md
+      - Backoff Policy: api/backoff.md
+      - Recovery: api/recovery.md
+      - Storage: api/storage.md
