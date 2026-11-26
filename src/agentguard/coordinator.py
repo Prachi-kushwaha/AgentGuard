@@ -59,7 +59,7 @@ class IdempotencyCoordinator:
         6. Interpret the claim result.
         7. Record the execution outcome through the backend.
     """
-    
+
     def __init__(self, backend, lease_seconds: float = 30.0):
         if isinstance(lease_seconds, bool) or not isinstance(
             lease_seconds, (int, float)
@@ -72,6 +72,7 @@ class IdempotencyCoordinator:
         self.backend = backend
         self.lease_seconds = lease_seconds
 
+
     def acquire(
         self,
         func,
@@ -81,6 +82,33 @@ class IdempotencyCoordinator:
         owner_id: str,
         scope_id: str = "default",
     ) -> ClaimResult:
+        """
+            Acquire ownership of a logical operation.
+
+            Constructs the operation identity and fingerprint,
+            creates an initial OperationRecord, and delegates
+            claiming to the backend.
+
+            Args:
+                func: Function associated with the operation.
+                args: Positional arguments passed to the function.
+                kwargs: Keyword arguments passed to the function.
+                idempotency_key: Key identifying the logical operation.
+                owner_id: Identifier of the requesting owner.
+                scope_id: Namespace used to scope operation identity.
+
+            Returns:
+                ClaimResult containing the backend claim outcome.
+
+            Raises:
+                KeyConflictError: If the idempotency key is reused
+                    with different operation inputs.
+                OperationBusyError: If the operation is currently
+                    owned by another worker.
+                RecoveryRequiredError: If the operation requires
+                    recovery before normal execution.
+                ValueError: If required inputs are invalid.
+        """
 
         if not isinstance(idempotency_key, str) or not idempotency_key.strip():
             raise ValueError("idempotency_key must be a non-empty string")
@@ -137,6 +165,7 @@ class IdempotencyCoordinator:
             )
 
         return claim_result
+
 
     def record_success(
         self,

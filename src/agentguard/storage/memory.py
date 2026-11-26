@@ -3,7 +3,7 @@ from threading import RLock
 from uuid import uuid4
 from dataclasses import replace
 
-from ..operation_record import OperationRecord
+from ..operation_record import OperationRecord, OPERATION_STATES
 from .protocol import (
     ClaimDisposition,
     ClaimResult,
@@ -36,6 +36,12 @@ class LeaseExpiredError(OwnershipError):
 
 
 class InvalidTransitionError(BackendError):
+    """Raised when a conditional transition cannot be performed."""
+
+class OptimisticConcurrencyError(BackendError):
+    """Raised when a conditional transition cannot be performed."""
+
+class InvalidStateError(BackendError):
     """Raised when a conditional transition cannot be performed."""
 
 
@@ -271,7 +277,7 @@ class InMemoryIdempotencyBackend:
                     disposition=ClaimDisposition.RECOVERY_REQUIRED,
                     record=existing,
                 )
-
+            # revisit later
             if existing.status == "PENDING":
 
                 # PENDING is only expected before an initial claim.
@@ -651,7 +657,6 @@ class InMemoryIdempotencyBackend:
                 grant=execution_grant,
             )
 
-
     def release(
         self,
         operation_id,
@@ -689,3 +694,216 @@ class InMemoryIdempotencyBackend:
             self._remove_ownership(operation_id)
 
             return True
+
+
+    def _recovery_mutation(
+        self,
+        *,
+        operation_id,
+        recovery_token,
+        expected_status,
+        expected_version,
+        target_status,
+        result=None,
+        reason=None,
+    ):
+        with self._lock:
+
+            current = self._records.get(operation_id)
+
+            if current is None:
+                raise OperationNotFoundError(
+                    operation_id
+                )
+
+            grant = self._ownership.get(operation_id)
+
+            if grant is None:
+                raise OwnershipError(
+                    "Recovery ownership grant missing"
+                )
+
+            self._validate_ownership(
+                operation_id=operation_id,
+                owner_token=recovery_token,
+            )
+
+            grant = self._ownership.get(operation_id)
+
+            if grant.actor != TransitionActor.RECOVERY:
+                raise OwnershipError(
+                    "Recovery mutation requires RECOVERY actor"
+                )
+
+            if current.status != expected_status:
+                raise OptimisticConcurrencyError(
+                    "Unexpected operation status"
+                )
+
+            if current.version != expected_version:
+                raise OptimisticConcurrencyError(
+                    "Operation version mismatch"
+                )
+
+            # Build the updated record using the same record
+            # structure and immutable identity conventions
+            # already used in your memory.py.
+            #
+            # Use dataclasses.replace if OperationRecord
+            # is a dataclass.
+
+            updated = replace(
+                current,
+                status=target_status,
+                result=result,
+                version=current.version + 1,
+                updated_at=datetime.now(timezone.utc),
+                metadata={
+                    **current.metadata,
+                    "recovery_reason": reason,
+                },
+            )
+
+            self._validate_transition(
+                current.status,
+                updated.status,
+                actor=grant.actor,
+            )
+
+            self._validate_record_payload(updated)
+
+            # Validate identity immutability here, using
+            # the immutable fields in your OperationRecord.
+
+            self._records[operation_id] = updated
+
+            # Record and ownership removal are performed
+            # within the same critical section.
+            self._ownership.pop(operation_id, None)
+
+            return updated
+
+
+    def complete_recovery(
+            self,
+            *,
+            operation_id,
+            recovery_token,
+            expected_status,
+            expected_version,
+            result,
+            reason=None,
+        ):
+            return self._recovery_mutation(
+                operation_id=operation_id,
+                recovery_token=recovery_token,
+                expected_status=expected_status,
+                expected_version=expected_version,
+                target_status=OPERATION_STATES.COMPLETED,
+                result=result,
+                reason=reason,
+            )
+
+    def defer_recovery(
+            self,
+            *,
+            operation_id,
+            recovery_token,
+            expected_status,
+            expected_version,
+            reason,
+        ):
+            return self._recovery_mutation(
+                operation_id=operation_id,
+                recovery_token=recovery_token,
+                expected_status=expected_status,
+                expected_version=expected_version,
+                target_status=OPERATION_STATES.DEFERRED,
+                reason=reason,
+            )
+
+    def mark_manual_intervention(
+        self,
+        *,
+        operation_id,
+        recovery_token,
+        expected_status,
+        expected_version,
+        reason,
+    ):
+        return self._recovery_mutation(
+            operation_id=operation_id,
+            recovery_token=recovery_token,
+            expected_status=expected_status,
+            expected_version=expected_version,
+            target_status=OPERATION_STATES.MANUAL_INTERVENTION,
+            reason=reason,
+        )
+
+    def reclaim_expired_recovery(
+        self,
+        *,
+        operation_id,
+        owner_id,
+        lease_seconds,
+    ):
+        with self._lock:
+
+            current = self._records.get(operation_id)
+
+            if current is None:
+                raise OperationNotFoundError(
+                    operation_id
+                )
+
+            if current.status != OPERATION_STATES.RECOVERING:
+                raise InvalidStateError(
+                    "Operation is not RECOVERING"
+                )
+
+            existing_grant = self._ownership.get(
+                operation_id
+            )
+
+            if existing_grant is not None:
+                if self._lease_is_active(existing_grant):
+                    return ClaimResult(
+                        disposition=ClaimDisposition.BUSY,
+                    )
+
+            # Previous recovery ownership is expired
+            # or absent. No old token can be used
+            # to authorize mutations.
+
+            updated = replace(
+                current,
+                recovery_attempts=(
+                    current.recovery_attempts + 1
+                ),
+                version=current.version + 1,
+                updated_at=datetime.now(timezone.utc),
+            )
+
+            self._validate_transition(
+                current.status,
+                updated.status,
+                actor=TransitionActor.RECOVERY,
+            )
+
+            self._validate_record_payload(updated)
+
+            new_grant = self._build_recovery_grant(
+                operation_id=operation_id,
+                owner_id=owner_id,
+                lease_seconds=lease_seconds,
+            )
+
+            # Commit both together.
+            self._records[operation_id] = updated
+            self._ownership[operation_id] = new_grant
+
+            return ClaimResult(
+                disposition=ClaimDisposition.CLAIMED,
+                record=updated,
+                grant=new_grant,
+            )
