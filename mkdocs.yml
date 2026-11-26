@@ -1,11 +1,11 @@
 site_name: AgentGuard
 site_description: Reliable execution, idempotency, and recovery for Python applications.
-site_url: https://agentguard.readthedocs.io/
-
-repo_url:https://prachi-kushwaha.github.io/agentguard_docs
-repo_name: YOUR_USERNAME/AgentGuard
+site_url: https://prachi-kushwaha.github.io/agentguard_docs/
+repo_url: https://github.com/Prachi-kushwaha/AgentGuard
+repo_name: Prachi-kushwaha/AgentGuard
 
 copyright: Copyright &copy; 2026 AgentGuard
+
 
 theme:
   name: material
@@ -22,14 +22,29 @@ theme:
 
   palette:
     - scheme: default
-      primary: indigo
-      accent: blue
+      primary: teal
+      accent: green
     - scheme: slate
-      primary: indigo
-      accent: blue
+      primary: teal
+      accent: lime
+
+extra_css:
+  - stylesheet/extra.css
+
 
 plugins:
   - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            members_order: source
 
 markdown_extensions:
   - admonition
@@ -46,19 +61,11 @@ markdown_extensions:
   - toc:
       permalink: true
 
-
 nav:
+  - Home: index.md
+
   - Execution Engine:
       - Overview: engine/overview.md
-      - Lifecycle: engine/lifecycle.md
-      - Retries: engine/retries.md
-      - Timeouts: engine/timeouts.md
-      - Execution Context: engine/context.md
-
-  - API Reference:
-      - Engine: api/engine.md
-      - Idempotency Coordinator: api/coordinator.md
-      - Execution Policy: api/execution_policy.md
-      - Backoff Policy: api/backoff.md
-      - Recovery: api/recovery.md
-      - Storage: api/storage.md
+      - API Reference:
+          - Coordinator:  api/api.md
+          - Engine: api/engine.md

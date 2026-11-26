@@ -1,0 +1,79 @@
+/* ==========================================
+   AgentGuard — Sage & Forest Theme
+   ========================================== */
+
+/* Main header */
+.md-header {
+    background-color: #344C40 !important;
+}
+
+/* Navigation tabs */
+.md-tabs {
+    background-color: #344C40 !important;
+}
+
+/* Search box */
+.md-search__form {
+    background-color: #26352D !important;
+}
+
+/* Search input */
+.md-search__input {
+    background-color: #26352D !important;
+}
+
+/* Header icons and text */
+.md-header,
+.md-tabs {
+    color: #FFFFFF;
+}
+
+/* Active navigation links */
+.md-nav__link--active {
+    color: #729583 !important;
+}
+
+/* Hover navigation */
+.md-nav__link:hover {
+    color: #92B7A2 !important;
+}
+
+/* Links in documentation */
+.md-typeset a {
+    color: #527965;
+}
+
+/* Link hover */
+.md-typeset a:hover {
+    color: #344C40;
+}
+
+/* Admonition border */
+.md-typeset .admonition,
+.md-typeset details {
+    border-color: #92B7A2 !important;
+}
+
+/* Admonition header */
+.md-typeset .admonition-title,
+.md-typeset details > summary {
+    background-color: #E4EEE8 !important;
+}
+
+/* Admonition body */
+.md-typeset .admonition,
+.md-typeset details {
+    background-color: #F5F8F6 !important;
+}
+
+/* Admonition icon */
+.md-typeset .admonition-title::before,
+.md-typeset details > summary::before {
+    background-color: #527965 !important;
+}
+
+/* Text selection */
+::selection {
+    background-color: #D4E3DA;
+    color: #344C40;
+}
