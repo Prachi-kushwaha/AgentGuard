@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from ..operation_record import OPERATION_STATES
+from ..operation_record import OperationStates
 from ..storage.protocol import ClaimDisposition
 from .recovery_models import (
     RecoveryContext,
@@ -159,7 +159,7 @@ class RecoveryEngine:
         #
         # Reconciliation is unnecessary because the operation's
         # result has already been persisted.
-        if record.status == OPERATION_STATES.COMPLETED:
+        if record.status == OperationStates.COMPLETED:
 
             return RecoveryOutcome(
                 operation_id=operation_id,

@@ -2,20 +2,17 @@ from dataclasses import dataclass, field
 from uuid import uuid4
 from typing import Any
 from datetime import datetime, timezone
-
+from enum import Enum
 
 # Defines the states an operation record is allowed to represent.
 # This validates the record's state value, but does not enforce legal
 # state transitions. Transition enforcement belongs to the coordinator/backend.
-OPERATION_STATES = {
-    "PENDING",
-    "RUNNING",
-    "UNKNOWN",
-    "RECOVERING",
-    "COMPLETED",
-    "FAILED",
-}
 
+class OperationStates(Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 @dataclass(frozen=True)
 class OperationRecord:
@@ -173,7 +170,7 @@ class OperationRecord:
         # The record may only represent a state recognized by AgentGuard.
         # This prevents arbitrary status strings from entering the system.
         # It does not validate transition legality.
-        if self.status not in OPERATION_STATES:
+        if self.status not in OperationStates:
             raise ValueError(
                 f"Invalid operation status: {self.status}"
             )

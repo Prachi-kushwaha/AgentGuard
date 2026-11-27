@@ -3,7 +3,7 @@ from threading import RLock
 from uuid import uuid4
 from dataclasses import replace
 
-from ..operation_record import OperationRecord, OPERATION_STATES
+from ..operation_record import OperationRecord, OperationStates
 from .protocol import (
     ClaimDisposition,
     ClaimResult,
@@ -40,10 +40,6 @@ class InvalidTransitionError(BackendError):
 
 class OptimisticConcurrencyError(BackendError):
     """Raised when a conditional transition cannot be performed."""
-
-class InvalidStateError(BackendError):
-    """Raised when a conditional transition cannot be performed."""
-
 
 class InMemoryIdempotencyBackend:
 
@@ -820,7 +816,7 @@ class InMemoryIdempotencyBackend:
                 recovery_token=recovery_token,
                 expected_status=expected_status,
                 expected_version=expected_version,
-                target_status=OPERATION_STATES.COMPLETED,
+                target_status=OperationStates.COMPLETED,
                 result=result,
                 reason=reason,
             )
@@ -840,7 +836,7 @@ class InMemoryIdempotencyBackend:
                 recovery_token=recovery_token,
                 expected_status=expected_status,
                 expected_version=expected_version,
-                target_status=OPERATION_STATES.DEFERRED,
+                target_status=OperationStates.DEFERRED,
                 reason=reason,
             )
 
@@ -859,7 +855,7 @@ class InMemoryIdempotencyBackend:
             recovery_token=recovery_token,
             expected_status=expected_status,
             expected_version=expected_version,
-            target_status=OPERATION_STATES.MANUAL_INTERVENTION,
+            target_status=OperationStates.MANUAL_INTERVENTION,
             reason=reason,
         )
 
@@ -880,8 +876,8 @@ class InMemoryIdempotencyBackend:
                     operation_id
                 )
 
-            if current.status != OPERATION_STATES.RECOVERING:
-                raise InvalidStateError(
+            if current.status != OperationStates.RECOVERING:
+                raise ValueError(
                     "Operation is not RECOVERING"
                 )
 
