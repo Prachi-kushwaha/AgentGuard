@@ -148,9 +148,9 @@ class Engine:
         # than implemented inside this execution engine.
         self.recovery_engine = recovery_engine
 
-   
+
     # PUBLIC EXECUTION API
-   
+
 
     def execute(
         self,
@@ -324,9 +324,9 @@ class Engine:
             attempt_timeout=attempt_timeout,
         )
 
-   
+
     # CLAIMED OPERATION EXECUTION
-   
+
 
     def _execute_claimed(
         self,
@@ -465,9 +465,9 @@ class Engine:
 
         return result
 
-   
+
     # NORMAL EXECUTION ENGINE
-   
+
 
     def _execute_normal(
         self,
@@ -627,9 +627,6 @@ class Engine:
 
             raise
 
-        # =====================================================
-        # ATTEMPT LOOP
-        # =====================================================
 
         # Execute until:
         #
@@ -641,10 +638,7 @@ class Engine:
             context.attempt_number
             < context.max_attempts
         ):
-
-            # -------------------------------------------------
-            # VALIDATE EXECUTION BEFORE EACH ATTEMPT
-            # -------------------------------------------------
+            # VALIDATE EXECUTION BEFORE EACH ATTEMP
 
             # This ensures the execution context is eligible
             # for another attempt.
@@ -670,10 +664,7 @@ class Engine:
                     )
 
                 raise
-
-            # -------------------------------------------------
-            # START ATTEMPT
-            # -------------------------------------------------
+            # START ATTEMP
 
             # Increment the attempt counter before execution.
             context.attempt_number += 1
@@ -683,20 +674,14 @@ class Engine:
                 context,
                 "RUNNING",
             )
-
-            # -------------------------------------------------
-            # ATTEMPT TIME MEASUREMENT
-            # -------------------------------------------------
+            # ATTEMPT TIME MEASUREMEN
 
             # Monotonic time is used for attempt timing.
             attempt_started = time.monotonic()
 
             # Start with the explicit attempt timeout.
             effective_timeout = attempt_timeout
-
-            # -------------------------------------------------
-            # APPLY OVERALL DEADLINE
-            # -------------------------------------------------
+            # APPLY OVERALL DEADLIN
 
             # An attempt cannot exceed the remaining overall
             # execution time budget.
@@ -723,10 +708,7 @@ class Engine:
                         effective_timeout,
                         deadline_remaining,
                     )
-
-            # -------------------------------------------------
-            # CHECK TIME BUDGET BEFORE EXECUTION
-            # -------------------------------------------------
+            # CHECK TIME BUDGET BEFORE EXECUTIO
 
             # Do not start an attempt when its effective
             # time budget has already expired.
@@ -750,9 +732,7 @@ class Engine:
 
                 raise exc
 
-            # =================================================
             # FUNCTION EXECUTION
-            # =================================================
 
             try:
 
@@ -771,9 +751,7 @@ class Engine:
                     - attempt_started
                 )
 
-                # -------------------------------------------------
                 # POST-EXECUTION TIMEOUT DETECTION
-                # -------------------------------------------------
 
                 # Because this implementation is synchronous,
                 # the function may already have completed its
@@ -793,9 +771,7 @@ class Engine:
                         f"of {effective_timeout:.3f} seconds"
                     )
 
-                # -------------------------------------------------
                 # SUCCESS
-                # -------------------------------------------------
 
                 # Store the result in the execution context.
                 context.results = result
@@ -808,18 +784,14 @@ class Engine:
 
                 return result
 
-            # =================================================
             # ATTEMPT FAILURE
-            # =================================================
 
             except Exception as exc:
 
                 # Store the last error for observability.
                 context.last_error = str(exc)
 
-                # -------------------------------------------------
                 # RETRY ELIGIBILITY
-                # -------------------------------------------------
 
                 # Only exceptions explicitly included in
                 # policy.retry_on are retryable.
@@ -844,9 +816,7 @@ class Engine:
                     and attempts_remaining
                 )
 
-                # -------------------------------------------------
                 # BACKOFF CALCULATION
-                # -------------------------------------------------
 
                 # Calculate the delay only when a retry
                 # has actually been considered eligible.
@@ -861,9 +831,7 @@ class Engine:
                     else None
                 )
 
-                # =================================================
                 # DEADLINE CHECK BEFORE RETRY
-                # =================================================
 
                 # Even if the exception is retryable,
                 # the next retry must fit within the
@@ -922,9 +890,7 @@ class Engine:
                             context.failure_reason
                         ) from exc
 
-                # -------------------------------------------------
                 # RECORD RETRY DECISION
-                # -------------------------------------------------
 
                 # Every attempted retry decision is recorded.
                 #
@@ -951,9 +917,7 @@ class Engine:
                     retry_record
                 )
 
-                # -------------------------------------------------
                 # RETRY
-                # -------------------------------------------------
 
                 if should_retry:
 
@@ -971,9 +935,7 @@ class Engine:
                     # Return to the attempt loop.
                     continue
 
-                # -------------------------------------------------
                 # TERMINAL FAILURE
-                # -------------------------------------------------
 
                 # No retry is permitted or no attempts remain.
                 context.failure_reason = str(exc)
@@ -986,9 +948,9 @@ class Engine:
                 # Preserve the original exception.
                 raise
 
-   
+
     # RECOVERY API
-   
+
 
     def recover(
         self,
@@ -1033,9 +995,9 @@ class Engine:
             owner_id=owner_id,
         )
 
-   
+
     # RECOVERED EXECUTION
-   
+
 
     def _execute_recovered(
         self,
@@ -1287,9 +1249,9 @@ class Engine:
         # SUCCESSFUL RECOVERED EXECUTION
 
 
-   
+
     # VALIDATION HELPERS
-   
+
 
     @staticmethod
     def _validate_timeout(

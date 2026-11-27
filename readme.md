@@ -2,9 +2,11 @@
 
 **A reliability and execution control layer for Python functions and AI agent tools.**
 
-AgentGuard is an open-source Python library designed to bring controlled, observable and resilient execution to functions, API calls and AI agent tool invocations.
+AgentGuard brings controlled, observable and resilient execution to Python functions, API calls and AI agent tool invocations.
 
-Instead of allowing functions to execute without safeguards, AgentGuard introduces execution policies, retries, backoff strategies, deadlines and execution tracking — with a roadmap toward idempotency, circuit breakers and asynchronous execution.
+Instead of allowing functions to execute without safeguards, AgentGuard provides a centralized execution layer with configurable execution policies, retries, backoff strategies, execution lifecycle tracking and deadline awareness.
+
+AgentGuard is designed to help developers build more reliable systems around functions, external APIs and AI agent tools.
 
 ---
 
@@ -20,9 +22,13 @@ A function call may fail because of:
 - Unexpected exceptions
 - Slow or unresponsive dependencies
 
-Handling these failures independently in every application creates duplicated logic and inconsistent behavior.
+Handling these failures independently in every application creates duplicated logic, inconsistent retry behavior and difficult-to-observe execution flows.
 
-AgentGuard aims to provide a centralized execution layer for managing these concerns.
+AgentGuard centralizes these execution concerns into a reusable execution layer.
+
+Rather than implementing retry logic, execution tracking and failure handling separately for every tool, developers can register functions and execute them under configurable policies.
+
+---
 
 ## Features
 
@@ -30,75 +36,182 @@ AgentGuard aims to provide a centralized execution layer for managing these conc
 
 - **Function Registry** — Register, retrieve and manage functions.
 - **Execution Context** — Track execution IDs, status, attempts, timestamps and execution metadata.
-- **Execution Lifecycle** — Controlled transitions between execution states.
-- **Execution Policies** — Configure retry attempts and retryable exceptions.
+- **Execution Lifecycle** — Manage execution state transitions.
+- **Execution Policies** — Configure retry limits and retryable exceptions.
 - **Retry Engine** — Automatically retry eligible failures.
 - **Backoff Strategies** — Exponential backoff with configurable limits and jitter.
 - **Retry History** — Record exceptions and retry decisions.
-- **Deadline Awareness** — Track total execution time budgets.
-- **Timeout Configuration** — Total execution and per-attempt timeout configuration (under development).
+- **Deadline Awareness** — Track execution time budgets.
+- **Timeout Configuration** — Configure execution and per-attempt timeout parameters (under development).
 
 ### Planned
 
 - Idempotency
-- Circuit Breaker
+- Circuit breakers
 - Async execution
 - Async retry and cancellation
 - Concurrency control
 - Child executions and execution trees
 - Observability and metrics
 
+---
+
 ## Installation
 
-Currently, AgentGuard is under active development.
-
-Clone the repository:
+Install AgentGuard directly from PyPI:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/AgentGuard.git
-cd AgentGuard
+pip install agentguard
 ```
 
-Install in editable mode:
-
-```bash
-pip install -e ".[dev]"
-```
-
-## Quick Example
+### Verify installation
 
 ```python
-from agentguard import Engine
+import agentguard
 
-# Example API design — subject to change during development
+print("AgentGuard installed successfully")
 ```
 
-The public API is evolving. See the examples and source code for the current implementation.
+---
+
+## Examples
+
+AgentGuard includes examples demonstrating how the library can be integrated into real-world workflows.
+
+### Resilient API Call
+
+Demonstrates how AgentGuard can protect an API call with execution policies and retry behavior.
+
+**Concepts:**
+
+- Function registration
+- Execution policies
+- Retryable exceptions
+- Backoff strategies
+- Controlled execution
+
+```text
+examples/resilient_api_call/
+```
+
+### AI Research & Report Generation Agent
+
+A multi-step AI research workflow that uses external tools to search for information, retrieve sources, analyze evidence and generate a research report.
+
+**Workflow:**
+
+1. Receive a research request.
+2. Search for relevant sources.
+3. Retrieve source content.
+4. Analyze and synthesize information.
+5. Generate a structured research report.
+6. Save the report.
+
+**Concepts:**
+
+- Agent tool execution
+- Function registration
+- Execution policies
+- Retry behavior
+- Backoff strategies
+- Execution tracking
+- External API integration
+- Failure handling
+
+```text
+examples/ai_research_agent/
+```
+
+### GitHub Issue Triage Agent
+
+An AI-powered workflow that retrieves GitHub issues, analyzes them and applies triage actions using the GitHub API.
+
+**Workflow:**
+
+1. Fetch issue information.
+2. Analyze the issue.
+3. Propose labels and a triage summary.
+4. Apply approved changes.
+5. Post a triage comment.
+
+**Concepts:**
+
+- External API integration
+- Agent tool execution
+- Retry handling
+- Execution policies
+- Controlled external operations
+
+```text
+examples/github_issue_triage/
+```
+
+---
 
 ## Architecture
 
-AgentGuard is designed around a separation of concerns:
+AgentGuard is designed around a separation of concerns.
 
-| Component | Responsibility |
-|---|---|
-| Function Register | Stores and retrieves executable functions |
-| Execution Context | Tracks an individual execution |
-| Execution Policy | Defines retry eligibility and attempt limits |
-| Backoff Policy | Calculates retry delays |
-| Engine | Orchestrates execution, validation and retries |
+| Component         | Responsibility                                 |
+| ----------------- | ---------------------------------------------- |
+| Function Register | Stores and retrieves executable functions      |
+| Execution Context | Tracks an individual execution                 |
+| Execution Policy  | Defines retry eligibility and attempt limits   |
+| Backoff Policy    | Calculates retry delays                        |
+| Engine            | Orchestrates execution, validation and retries |
+
+### Execution flow
+
+```mermaid
+flowchart TD
+    A[Function or Tool] --> B[Function Register]
+    B --> C[Engine]
+    C --> D[Execution Policy]
+    D --> E[Execute Function]
+    E --> F{Execution Result}
+    F -->|Success| G[Completed]
+    F -->|Retryable Failure| H[Backoff]
+    H --> I{Attempts Remaining?}
+    I -->|Yes| E
+    I -->|No| J[Failed]
+```
+
+---
+
+## Getting Started
+
+Explore the examples to understand how AgentGuard can be integrated into your Python applications and AI agent workflows.
+
+Start with:
+
+```text
+examples/resilient_api_call/
+```
+
+Then explore the multi-tool workflow:
+
+```text
+examples/ai_research_agent/
+```
+
+---
 
 ## Project Status
 
 AgentGuard is in early development.
 
-Interfaces and implementation details may change as the project evolves. It is not yet recommended for critical production workloads.
+Interfaces and implementation details may change as the project evolves.
 
-## Contributing
+AgentGuard is currently focused on controlled function execution, execution lifecycle management, retry policies, backoff strategies and execution tracking.
 
-Contributions, ideas, bug reports and discussions are welcome.
+Features such as idempotency, circuit breakers, asynchronous execution and advanced concurrency control are planned for future development.
 
-As the project develops, contributions around reliability mechanisms, testing, architecture and integrations will be particularly valuable.
+AgentGuard is not yet recommended for critical production workloads.
+
+---
 
 ## License
 
-AgentGuard is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+AgentGuard is licensed under the MIT License.
+
+See [LICENSE](LICENSE) for details.
