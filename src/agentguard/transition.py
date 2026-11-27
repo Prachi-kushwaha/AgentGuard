@@ -14,7 +14,30 @@ ALLOWED_TRANSITIONS = {
     "COMPLETED": set(),
 }
 
+
 def transition(context, new_status):
+    """
+    Transition a mutable ExecutionContext into a new runtime state.
+
+    This function validates the requested transition against the runtime
+    state transition rules and updates the context in place.
+
+    When transitioning into RUNNING, it initializes the execution start
+    timestamps. The wall-clock timestamp provides an externally meaningful
+    time, while the monotonic timestamp is suitable for measuring elapsed
+    time and enforcing execution deadlines.
+
+    Args:
+        context: The mutable execution context being transitioned.
+        new_status: The requested runtime destination state.
+
+    Raises:
+        ValueError: If the requested transition is not permitted.
+
+    Note:
+        This function modifies the supplied context directly. It does not
+        create an immutable snapshot or persist the transition.
+    """
 
     if new_status not in ALLOWED_TRANSITIONS[context.status]:
         raise ValueError(

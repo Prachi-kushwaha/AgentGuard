@@ -1,4 +1,3 @@
-
 from dataclasses import replace
 from datetime import datetime, timezone
 
@@ -33,8 +32,15 @@ class IdempotencyCoordinator:
     """
     Coordinates idempotent operation acquisition and outcome recording.
 
-    The coordinator acts as an orchestration layer between the
-    execution system and the storage backend.
+    The coordinator acts as an orchestration layer between the execution
+    system and the storage backend. It prepares the data required to identify
+    an operation, requests ownership, interprets the backend's response, and
+    constructs records representing execution outcomes.
+
+    The coordinator deliberately does not own the storage-level concurrency
+    guarantees. Atomic claiming, ownership validation, lease enforcement,
+    and optimistic concurrency must be enforced by the backend because the
+    backend is the authoritative source of persisted state.
 
     Responsibilities:
         - Validate acquisition inputs.
@@ -44,11 +50,6 @@ class IdempotencyCoordinator:
         - Interpret claim dispositions.
         - Construct outcome records.
         - Delegate state mutations to the backend.
-
-    The coordinator does not independently enforce storage
-    atomicity, ownership validation, lease validity, or
-    optimistic concurrency. These guarantees are enforced
-    by the backend.
 
     Lifecycle:
         1. Validate operation inputs.
@@ -61,6 +62,19 @@ class IdempotencyCoordinator:
     """
 
     def __init__(self, backend, lease_seconds: float = 30.0):
+        """
+        Initialize the coordinator with its storage backend and lease duration.
+
+        The backend is injected rather than created internally so the
+        coordinator can operate with different storage implementations,
+        such as an in-memory backend or a durable database backend.
+
+        lease_seconds determines how long the backend grants ownership
+        when an operation is successfully claimed.
+        """
+
+        # bool is a subclass of int in Python. Explicitly rejecting it avoids
+        # accepting True or False as accidental lease-duration values.
         if isinstance(lease_seconds, bool) or not isinstance(
             lease_seconds, (int, float)
         ):
@@ -72,7 +86,6 @@ class IdempotencyCoordinator:
         self.backend = backend
         self.lease_seconds = lease_seconds
 
-
     def acquire(
         self,
         func,
@@ -83,33 +96,40 @@ class IdempotencyCoordinator:
         scope_id: str = "default",
     ) -> ClaimResult:
         """
-            Acquire ownership of a logical operation.
+        Acquire ownership of a logical operation.
 
-            Constructs the operation identity and fingerprint,
-            creates an initial OperationRecord, and delegates
-            claiming to the backend.
+        The coordinator creates a fingerprint representing the function and
+        its inputs, then combines that fingerprint with the identity metadata
+        to construct the initial operation record.
 
-            Args:
-                func: Function associated with the operation.
-                args: Positional arguments passed to the function.
-                kwargs: Keyword arguments passed to the function.
-                idempotency_key: Key identifying the logical operation.
-                owner_id: Identifier of the requesting owner.
-                scope_id: Namespace used to scope operation identity.
+        The backend performs the actual claim. It is responsible for
+        atomically determining whether this caller may execute the operation,
+        whether the operation is already completed, whether another owner
+        holds it, or whether recovery is required.
 
-            Returns:
-                ClaimResult containing the backend claim outcome.
+        Args:
+            func: Function associated with the operation.
+            args: Positional arguments passed to the function.
+            kwargs: Keyword arguments passed to the function.
+            idempotency_key: Key identifying the logical operation.
+            owner_id: Identifier of the requesting owner.
+            scope_id: Namespace used to scope operation identity.
 
-            Raises:
-                KeyConflictError: If the idempotency key is reused
-                    with different operation inputs.
-                OperationBusyError: If the operation is currently
-                    owned by another worker.
-                RecoveryRequiredError: If the operation requires
-                    recovery before normal execution.
-                ValueError: If required inputs are invalid.
+        Returns:
+            ClaimResult containing the backend claim outcome.
+
+        Raises:
+            KeyConflictError: If the idempotency key is reused with
+                different operation inputs.
+            OperationBusyError: If the operation is currently
+                owned by another worker.
+            RecoveryRequiredError: If the operation requires
+                recovery before execution.
+            ValueError: If required inputs are invalid.
         """
 
+        # Validate caller-provided identity fields before constructing
+        # fingerprints or submitting a claim to the backend.
         if not isinstance(idempotency_key, str) or not idempotency_key.strip():
             raise ValueError("idempotency_key must be a non-empty string")
 
@@ -119,14 +139,24 @@ class IdempotencyCoordinator:
         if not isinstance(scope_id, str) or not scope_id.strip():
             raise ValueError("scope_id must be a non-empty string")
 
+        # The fingerprint represents the logical request inputs.
+        # The backend uses it to detect when the same idempotency key
+        # is reused for a different request.
         fingerprint = generate_fingerprint(func, args, kwargs)
 
+        # OperationIdentity separates identity lookup concerns from the
+        # record's execution state. The combination of scope, function,
+        # and idempotency key defines the identity namespace.
         identity = OperationIdentity(
             scope_id=scope_id,
             function_name=func.__name__,
             idempotency_key=idempotency_key,
         )
 
+        # Construct the initial record before claiming.
+        # This represents the operation's initial persisted state and
+        # provides the backend with the identity and fingerprint needed
+        # to perform its atomic claim decision.
         record = OperationRecord(
             idempotency_key=idempotency_key,
             function_name=func.__name__,
@@ -141,31 +171,45 @@ class IdempotencyCoordinator:
             metadata={},
         )
 
+        # The backend is the authority on ownership and persisted state.
+        # The coordinator does not perform a separate lookup followed by
+        # a claim, because that pattern would introduce a race condition.
         claim_result = self.backend.claim(
             record=record,
             owner_id=owner_id,
             lease_seconds=self.lease_seconds,
         )
 
+        # Validate the backend's response contract before interpreting it.
+        # This protects the coordinator from malformed backend responses.
         self._validate_claim_result(claim_result)
 
+        # The backend has determined that this identity conflicts with
+        # an existing operation using the same key but different inputs.
         if claim_result.disposition is ClaimDisposition.KEY_CONFLICT:
             raise KeyConflictError(
                 "Idempotency key was reused with different arguments"
             )
 
+        # Another worker currently owns the operation. Executing it here
+        # would violate the ownership guarantee and could cause duplicate
+        # side effects.
         if claim_result.disposition is ClaimDisposition.BUSY:
             raise OperationBusyError(
                 "Operation is currently owned by another worker"
             )
 
+        # The existing operation cannot proceed through the normal
+        # execution path until its persisted state has been reconciled.
         if claim_result.disposition is ClaimDisposition.RECOVERY_REQUIRED:
             raise RecoveryRequiredError(
                 "Operation requires recovery before execution"
             )
 
+        # CLAIMED and COMPLETED are returned to the execution layer.
+        # The execution layer can proceed when it has a grant, or reuse
+        # the previously persisted result when the operation is completed.
         return claim_result
-
 
     def record_success(
         self,
@@ -174,6 +218,16 @@ class IdempotencyCoordinator:
         grant: OwnershipGrant,
         record: OperationRecord,
     ) -> OperationRecord:
+        """
+        Construct and persist a successful execution outcome.
+
+        This method prepares the completed record but does not directly
+        mutate storage. The backend validates ownership, the expected
+        state/version, and the transition before committing the update.
+
+        Using replace preserves the other record fields while producing
+        a new immutable record with the success-specific fields updated.
+        """
 
         updated = replace(
             record,
@@ -184,6 +238,9 @@ class IdempotencyCoordinator:
             version=record.version + 1,
         )
 
+        # The expected status and version are derived from the record
+        # supplied to this method. The backend must reject the mutation
+        # if the persisted record has changed since this record was read.
         return self._transition(
             operation_id=operation_id,
             updated_record=updated,
@@ -199,6 +256,14 @@ class IdempotencyCoordinator:
         grant: OwnershipGrant,
         record: OperationRecord,
     ) -> OperationRecord:
+        """
+        Construct and persist a known execution failure.
+
+        FAILED represents an execution failure whose outcome is known
+        to the execution system. It differs from UNKNOWN, where the
+        system cannot reliably determine whether the operation's
+        side effects occurred.
+        """
 
         updated = replace(
             record,
@@ -224,6 +289,17 @@ class IdempotencyCoordinator:
         grant: OwnershipGrant,
         record: OperationRecord,
     ) -> OperationRecord:
+        """
+        Persist an outcome whose completion status cannot be determined.
+
+        UNKNOWN is particularly important for operations involving external
+        side effects. For example, a remote API might successfully process
+        a request while the client loses the response.
+
+        Marking such an operation UNKNOWN prevents the execution system
+        from incorrectly assuming that the side effect definitely failed
+        and blindly executing it again.
+        """
 
         updated = replace(
             record,
@@ -249,6 +325,17 @@ class IdempotencyCoordinator:
         expected_version: int,
         grant: OwnershipGrant,
     ) -> OperationRecord:
+        """
+        Delegate an execution-owned state transition to the backend.
+
+        The coordinator supplies the ownership token rather than making
+        ownership decisions itself. The backend must validate the token,
+        lease, actor, expected state, and version before accepting the
+        mutation.
+
+        This delegation keeps the coordinator independent of the
+        backend's synchronization and persistence implementation.
+        """
 
         return self.backend.transition(
             operation_id=operation_id,
@@ -261,21 +348,33 @@ class IdempotencyCoordinator:
 
     @staticmethod
     def _validate_claim_result(result: ClaimResult):
+        """
+        Validate the structural contract returned by the backend.
+
+        This method checks that the backend returned the expected result
+        type and that certain dispositions are consistent with their
+        associated record and ownership data.
+
+        These checks validate the response structure; they do not replace
+        backend-side enforcement of atomicity or ownership.
+        """
 
         if not isinstance(result, ClaimResult):
             raise TypeError("Backend must return ClaimResult")
 
+        # A successful claim must provide the ownership authorization
+        # required for subsequent execution-owned transitions.
         if result.disposition is ClaimDisposition.CLAIMED:
             if result.grant is None:
                 raise IdempotencyError(
                     "CLAIMED result must include an ownership grant"
                 )
 
+        # COMPLETED must represent a record that is actually completed.
+        # Otherwise, the disposition and record would contradict each other,
+        # potentially causing the caller to reuse an invalid result.
         if result.disposition is ClaimDisposition.COMPLETED:
             if result.record.status != "COMPLETED":
                 raise IdempotencyError(
                     "COMPLETED disposition must contain a completed record"
                 )
-
-
-
