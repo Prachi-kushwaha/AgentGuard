@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "agentguard-prachi-test"
 version = "0.1.0"
 description = "A reliability and execution control layer for Python functions and AI agent tools"
-readme = "README.md"
+readme = "readme.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [
