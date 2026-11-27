@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [
-    { name = "Your Name" }
+    { name = "Prachi Kushawaha" }
 ]
 keywords = [
     "ai-agents",
@@ -24,13 +24,17 @@ dependencies = []
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-cov",
     "ruff",
-    "mypy"
+    "mypy",
+    "build",
+    "twine",
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]"
 ]
 
 [tool.pytest.ini_options]

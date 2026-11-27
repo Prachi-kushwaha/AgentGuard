@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from .recovery_handler import RecoveryContext, RecoveryResult
+from .recovery_models import RecoveryContext, RecoveryResult
 
 
 class RecoveryHandler(ABC):

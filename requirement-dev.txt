@@ -1,0 +1,18 @@
+# AgentGuard development dependencies
+
+# Testing
+pytest
+pytest-cov
+
+# Code quality
+ruff
+mypy
+
+# Documentation
+mkdocs
+mkdocs-material
+mkdocstrings[python]
+
+# Packaging and publishing
+build
+twine
