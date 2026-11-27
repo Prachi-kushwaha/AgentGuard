@@ -67,5 +67,7 @@ nav:
   - Execution Engine:
       - Overview: engine/overview.md
       - API Reference:
-          - Coordinator:  api/api.md
+          - Coordinator:  api/coordinator.md
           - Engine: api/engine.md
+          - Recovery: api/recovery.md
+          - Storage: api/storage.md
